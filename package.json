@@ -22,6 +22,7 @@
 		"publish": "npm run script -- publish"
 	},
 	"dependencies": {
+		"@riao/crypto": "^1.1.0",
 		"@riao/dbal": "^3.8.0",
 		"@riao/iam": "^3.0.0"
 	},
@@ -31,6 +32,7 @@
 		"@riao/postgres": "^3.5.0",
 		"@types/jasmine": "^5.1.4",
 		"@types/node": "^18.19.39",
+		"@types/uuid": "^10.0.0",
 		"@typescript-eslint/eslint-plugin": "^7.13.1",
 		"eslint": "^8.57.0",
 		"jasmine": "^5.1.0",
