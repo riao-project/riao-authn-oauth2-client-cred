@@ -103,8 +103,12 @@ await oauth2.createClientCredential(
 - The principal ID must exist and be active
 - If the principal doesn't exist, credential creation fails with a clear error
 
+**Client Secret Validation:**
+- Client secrets must be at least 32 characters long. Use a cryptographically secure random value such as one returned by `generateSecret()`.
+
 **Throws:** Error if:
 - Client ID format is invalid
+- Client secret is shorter than 32 characters
 - Client ID is already in use (globally unique)
 - Principal doesn't exist or is inactive
 

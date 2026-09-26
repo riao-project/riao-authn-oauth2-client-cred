@@ -28,6 +28,8 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 
 	const repo = auth.principalRepo;
 	const credentialsRepo = auth.credentialsRepo;
+	const validTestSecret = 'test-secret-key-minimum-32-characters-long';
+	const alternateTestSecret = 'another-test-secret-minimum-32-characters-long';
 
 	beforeAll(async () => {
 		await db.init();
@@ -65,7 +67,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'test-client-1',
-				'test-secret-123',
+				validTestSecret,
 				'Test Client'
 			);
 
@@ -80,7 +82,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 				expect(credential.description).toEqual('Test Client');
 				expect(
 					await compare(
-						'test-secret-123',
+						validTestSecret,
 						credential.client_secret_hash
 					)
 				).toEqual(true);
@@ -97,7 +99,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'duplicate-client',
-				'secret-1'
+				validTestSecret
 			);
 
 			// Attempt to create with same client_id
@@ -105,7 +107,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 				auth.createClientCredential(
 					principalId,
 					'duplicate-client',
-					'secret-2'
+					alternateTestSecret
 				)
 			).toBeRejectedWithError(/already in use/);
 		});
@@ -119,14 +121,14 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'list-client-1',
-				'secret-1',
+				validTestSecret,
 				'Client 1'
 			);
 
 			await auth.createClientCredential(
 				principalId,
 				'list-client-2',
-				'secret-2',
+				alternateTestSecret,
 				'Client 2'
 			);
 
@@ -147,7 +149,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'sensitive-client',
-				'very-sensitive-secret'
+				validTestSecret
 			);
 
 			const credentials = await auth.listCredentials(principalId);
@@ -155,6 +157,49 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			expect(credentials.length).toEqual(1);
 			// Type system ensures client_secret_hash is omitted
 			expect(credentials[0].client_id).toEqual('sensitive-client');
+		});
+	});
+
+	describe('Client Secret Validation', () => {
+		it('should reject an empty client_secret', async () => {
+			const principalId = await createPrincipal(
+				'empty_secret_test',
+				'Empty Secret Test'
+			);
+
+			await expectAsync(
+				auth.createClientCredential(principalId, 'empty-secret-client', '')
+			).toBeRejectedWithError(/at least 32 characters/);
+		});
+
+		it('should reject a client_secret shorter than 32 characters', async () => {
+			const principalId = await createPrincipal(
+				'short_secret_test',
+				'Short Secret Test'
+			);
+
+			await expectAsync(
+				auth.createClientCredential(
+					principalId,
+					'short-secret-client',
+					'a'.repeat(31)
+				)
+			).toBeRejectedWithError(/at least 32 characters/);
+		});
+
+		it('should accept a client_secret of exactly 32 characters', async () => {
+			const principalId = await createPrincipal(
+				'minimum_secret_test',
+				'Minimum Secret Test'
+			);
+
+			await expectAsync(
+				auth.createClientCredential(
+					principalId,
+					'minimum-secret-client',
+					'a'.repeat(32)
+				)
+			).toBeResolved();
 		});
 	});
 
@@ -225,7 +270,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 				await auth.createClientCredential(
 					principalId,
 					validIds[i],
-					`secret-${i}`,
+					`${validTestSecret}${i}`,
 					`Valid Client ${i}`
 				);
 			}
@@ -243,7 +288,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 				auth.createClientCredential(
 					nonexistentId,
 					'test-client',
-					'test-secret'
+					validTestSecret
 				)
 			).toBeRejectedWithError(/does not exist or is inactive/);
 		});
@@ -257,7 +302,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'test-client',
-				'test-secret'
+				validTestSecret
 			);
 
 			const credential = await credentialsRepo.findOne({
@@ -279,7 +324,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'track-client',
-				'track-secret'
+				validTestSecret
 			);
 
 			const credential = await credentialsRepo.findOne({
@@ -298,7 +343,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'track-failed-client',
-				'correct-secret'
+				validTestSecret
 			);
 
 			// Attempt 1 - wrong secret
@@ -331,7 +376,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'track-reset-client',
-				'correct-secret'
+				validTestSecret
 			);
 
 			// Fail once
@@ -347,7 +392,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			// Succeed - should reset counter
 			await auth.exchangeCredentials(
 				'track-reset-client',
-				'correct-secret'
+				validTestSecret
 			);
 
 			credential = await credentialsRepo.findOne({
@@ -365,7 +410,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'track-timestamp-client',
-				'timestamp-secret'
+				validTestSecret
 			);
 
 			let credential = await credentialsRepo.findOne({
@@ -377,7 +422,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			const beforeTime = new Date();
 			await auth.exchangeCredentials(
 				'track-timestamp-client',
-				'timestamp-secret'
+				validTestSecret
 			);
 			const afterTime = new Date();
 
@@ -408,7 +453,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'revoked-for-error-test',
-				'revoked-secret'
+				validTestSecret
 			);
 
 			const credential = await credentialsRepo.findOne({
@@ -424,7 +469,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			try {
 				await auth.exchangeCredentials(
 					'revoked-for-error-test',
-					'revoked-secret'
+					validTestSecret
 				);
 			}
 			catch (err: any) {
@@ -517,12 +562,12 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'exchange-client',
-				'exchange-secret'
+				validTestSecret
 			);
 
 			const tokenResponse = await auth.exchangeCredentials(
 				'exchange-client',
-				'exchange-secret'
+				validTestSecret
 			);
 
 			expect(tokenResponse.token_type).toEqual('Bearer');
@@ -545,7 +590,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'secret-test-client',
-				'correct-secret'
+				validTestSecret
 			);
 
 			await expectAsync(
@@ -562,7 +607,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'revoked-client',
-				'revoked-secret'
+				validTestSecret
 			);
 
 			const credential = await credentialsRepo.findOne({
@@ -576,7 +621,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.revokeClientCredential(credential.id);
 
 			await expectAsync(
-				auth.exchangeCredentials('revoked-client', 'revoked-secret')
+				auth.exchangeCredentials('revoked-client', validTestSecret)
 			).toBeRejectedWithError(/revoked/);
 		});
 	});
@@ -591,12 +636,12 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'verify-client',
-				'verify-secret'
+				validTestSecret
 			);
 
 			const tokenResponse = await auth.exchangeCredentials(
 				'verify-client',
-				'verify-secret'
+				validTestSecret
 			);
 
 			const payload = await auth.verifyAccessToken(
@@ -623,12 +668,12 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'revoke-verify-client',
-				'revoke-verify-secret'
+				validTestSecret
 			);
 
 			const tokenResponse = await auth.exchangeCredentials(
 				'revoke-verify-client',
-				'revoke-verify-secret'
+				validTestSecret
 			);
 
 			const credential = await credentialsRepo.findOne({
@@ -659,7 +704,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'revoke-single-client',
-				'revoke-single-secret'
+				validTestSecret
 			);
 
 			const credential = await credentialsRepo.findOne({
@@ -688,13 +733,13 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				'revoke-all-client-1',
-				'secret-1'
+				validTestSecret
 			);
 
 			await auth.createClientCredential(
 				principalId,
 				'revoke-all-client-2',
-				'secret-2'
+				alternateTestSecret
 			);
 
 			await auth.revokeAllCredentials(principalId);
@@ -715,7 +760,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				clientId,
-				'original-secret',
+				validTestSecret,
 				'Original Client'
 			);
 
@@ -736,7 +781,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 				auth.createClientCredential(
 					principalId,
 					clientId,
-					'new-secret',
+					alternateTestSecret,
 					'New Client'
 				)
 			).toBeRejectedWithError(/already in use/);
@@ -758,7 +803,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principal1Id,
 				clientId,
-				'secret-1'
+				validTestSecret
 			);
 
 			// Principal 1 revokes it
@@ -776,7 +821,11 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			// Should fail even though it's a different principal
 			// because client_id is globally unique
 			await expectAsync(
-				auth.createClientCredential(principal2Id, clientId, 'secret-2')
+				auth.createClientCredential(
+					principal2Id,
+					clientId,
+					alternateTestSecret
+				)
 			).toBeRejectedWithError(/already in use/);
 		});
 
@@ -793,7 +842,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				clientId1,
-				'secret-1'
+				validTestSecret
 			);
 
 			const credential1 = await credentialsRepo.findOne({
@@ -811,7 +860,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await auth.createClientCredential(
 				principalId,
 				clientId2,
-				'secret-2',
+				alternateTestSecret,
 				'New Client'
 			);
 
@@ -862,12 +911,12 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			await authWithHS512.createClientCredential(
 				principalId,
 				'hs512-client',
-				'hs512-secret'
+				validTestSecret
 			);
 
 			const tokenResponse = await authWithHS512.exchangeCredentials(
 				'hs512-client',
-				'hs512-secret'
+				validTestSecret
 			);
 
 			const payload = await authWithHS512.verifyAccessToken(

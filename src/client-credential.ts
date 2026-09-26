@@ -27,6 +27,13 @@ export const CLIENT_ID_VALIDATION = {
 } as const;
 
 /**
+ * Client secret validation constraints
+ */
+export const CLIENT_SECRET_VALIDATION = {
+	MIN_LENGTH: 32,
+} as const;
+
+/**
  * Generate a cryptographically secure random secret
  * @param length Length of secret to generate (default: 32)
  * @returns Random alphanumeric secret

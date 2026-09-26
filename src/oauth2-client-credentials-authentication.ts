@@ -8,7 +8,11 @@ import { Hash } from '@riao/iam/hash';
 import { Principal } from '@riao/iam/auth';
 import { Authentication } from '@riao/iam/authentication';
 import { AuthOptions } from '@riao/iam/auth/auth';
-import { ClientCredential, CLIENT_ID_VALIDATION } from './client-credential';
+import {
+	ClientCredential,
+	CLIENT_ID_VALIDATION,
+	CLIENT_SECRET_VALIDATION,
+} from './client-credential';
 
 /**
  * OAuth2 Client Credentials Token Payload
@@ -125,6 +129,11 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	): Promise<void> {
 		// Validate client_id format
 		this.validateClientId(clientId);
+		if (clientSecret.length < CLIENT_SECRET_VALIDATION.MIN_LENGTH) {
+			throw new Error(
+				`Client secret must be at least ${CLIENT_SECRET_VALIDATION.MIN_LENGTH} characters`
+			);
+		}
 
 		// Verify principal exists
 		const principal = await this.findActivePrincipal({
