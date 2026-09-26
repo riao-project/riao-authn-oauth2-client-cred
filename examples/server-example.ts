@@ -295,11 +295,12 @@ async function main(): Promise<void> {
 	}
 	catch (error) {
 		console.error('❌ Error:', error);
-		process.exit(1);
 	}
 	finally {
 		// Clean up database connection
 		await db.disconnect();
+
+		process.exit(1);
 	}
 }
 
