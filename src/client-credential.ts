@@ -2,7 +2,7 @@
  * OAuth2 Client Credential Record
  * Stored in database to track client credentials and their lifecycle
  */
-import { randomBytes } from 'crypto';
+import { randomBytes } from 'node:crypto';
 
 export interface ClientCredential {
 	id: string;
@@ -36,17 +36,10 @@ export const CLIENT_SECRET_VALIDATION = {
 /**
  * Generate a cryptographically secure random secret
  * @param length Length of secret to generate (default: 32)
- * @returns Random alphanumeric secret
+ * @returns Random hexadecimal secret of the requested length
  */
 export function generateSecret(length: number = 32): string {
-	const characters =
-		'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	const bytes = randomBytes(length);
-	let result = '';
+	const byteLength = Math.ceil(length / 2);
 
-	for (let i = 0; i < length; i++) {
-		result += characters[bytes[i] % characters.length];
-	}
-
-	return result;
+	return randomBytes(byteLength).toString('hex').slice(0, length);
 }
