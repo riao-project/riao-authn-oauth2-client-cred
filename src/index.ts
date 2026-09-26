@@ -2,6 +2,7 @@ export {
 	OAuth2ClientCredentialsAuthentication,
 	OAuth2ClientCredentialsOptions,
 	OAuth2TokenPayload,
+	CreateClientCredentialOptions,
 } from './oauth2-client-credentials-authentication';
 export {
 	ClientCredential,

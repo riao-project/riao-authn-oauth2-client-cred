@@ -116,12 +116,12 @@ async function main(): Promise<void> {
 		const clientId = `my-service-${Date.now()}`;
 		const clientSecret = secureSecret;
 
-		await oauth2.createClientCredential(
-			userId,
+		await oauth2.createClientCredential({
+			principalId: userId,
 			clientId,
 			clientSecret,
-			'My Service Application'
-		);
+			description: 'My Service Application',
+		});
 		console.log('✓ Credentials created');
 		console.log(`  Client ID: ${clientId}`);
 		console.log(`  Client Secret: ${clientSecret} (keep this safe!)\n`);
@@ -177,12 +177,12 @@ async function main(): Promise<void> {
 		const clientId2 = `my-service-v2-${Date.now()}`;
 		const clientSecret2 = generateSecret(32);
 
-		await oauth2.createClientCredential(
-			userId,
-			clientId2,
-			clientSecret2,
-			'My Service v2 (backup)'
-		);
+		await oauth2.createClientCredential({
+			principalId: userId,
+			clientId: clientId2,
+			clientSecret: clientSecret2,
+			description: 'My Service v2 (backup)',
+		});
 		console.log(`✓ Second credential created: ${clientId2}\n`);
 
 		// Example 7: List again (should have 2)

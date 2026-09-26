@@ -86,12 +86,12 @@ import { generateSecret } from '@riao/authn-oauth2-client-cred';
 const clientSecret = generateSecret(32); // 32-character random string
 
 // Create credentials for a principal
-await oauth2.createClientCredential(
-  userId,
-  'my-app-client',
+await oauth2.createClientCredential({
+  principalId: userId,
+  clientId: 'my-app-client',
   clientSecret,
-  'My Application'
-);
+  description: 'My Application',
+});
 ```
 
 **Client ID Validation:**
@@ -196,11 +196,11 @@ Verify and decode a JWT access token.
 
 **Returns:** Token payload with `client_id`, `principal_id`, `iat`, `exp` if valid; null if invalid/expired
 
-### `createClientCredential(principalId, clientId, clientSecret, description?)`
+### `createClientCredential(options)`
 
 Create new client credentials for a principal.
 
-**Parameters:**
+**Parameters (`options`):**
 - `principalId` - The principal (user/service) ID (must exist and be active)
 - `clientId` - Unique identifier (3-255 chars, alphanumeric + `-`, `_`, `.`, `:`)
 - `clientSecret` - Secret (will be bcrypt hashed, never stored in plain text)

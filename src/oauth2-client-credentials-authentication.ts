@@ -43,6 +43,16 @@ export interface OAuth2ClientCredentialsOptions extends AuthOptions {
 }
 
 /**
+ * Options for creating a new client credential
+ */
+export interface CreateClientCredentialOptions {
+	principalId: DatabaseRecordId;
+	clientId: string;
+	clientSecret: string;
+	description?: string;
+}
+
+/**
  * OAuth2 Client Credentials Authentication
  * Implements server-to-server authentication using client_id and client_secret
  *
@@ -115,18 +125,17 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 
 	/**
 	 * Create a new client credential for a principal
-	 * @param principalId The principal ID
-	 * @param clientId Unique client identifier
-	 * @param clientSecret Secret (will be hashed before storage)
-	 * @param description Optional description
+	 * @param options.principalId The principal ID
+	 * @param options.clientId Unique client identifier
+	 * @param options.clientSecret Secret (will be hashed before storage)
+	 * @param options.description Optional description
 	 * @throws Error if principal doesn't exist, client_id is invalid, or already in use
 	 */
 	public async createClientCredential(
-		principalId: DatabaseRecordId,
-		clientId: string,
-		clientSecret: string,
-		description?: string
+		options: CreateClientCredentialOptions
 	): Promise<void> {
+		const { principalId, clientId, clientSecret, description } = options;
+
 		// Validate client_id format
 		this.validateClientId(clientId);
 		if (clientSecret.length < CLIENT_SECRET_VALIDATION.MIN_LENGTH) {
@@ -345,8 +354,8 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		>
 	): Promise<TPrincipal | null> {
 		const token = await this.exchangeCredentials(
-				credentials.client_id as string,
-				credentials.client_secret as string
+			credentials.client_id as string,
+			credentials.client_secret as string
 		);
 
 		const payload = await this.verifyAccessToken(token.access_token);
