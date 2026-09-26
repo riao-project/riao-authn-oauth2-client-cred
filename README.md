@@ -12,6 +12,10 @@ This driver implements the **OAuth2 Client Credentials flow**, enabling secure s
 - Token signature verification for security
 - Multiple credentials per principal (user/service)
 - Credential revocation support
+- Principal validation to prevent orphaned credentials
+- Client ID format validation
+- Usage tracking (last exchange time, failed attempt counter)
+- Cryptographically secure secret generation utility
 - Database persistence
 - TypeScript support with full type safety
 
@@ -76,14 +80,33 @@ const principal = await oauth2.principalRepo.findOne({
 ### 3. Create Client Credentials
 
 ```typescript
+// Generate a cryptographically secure secret
+import { generateSecret } from '@riao/authn-oauth2-client-cred';
+
+const clientSecret = generateSecret(32); // 32-character random string
+
 // Create credentials for a principal
 await oauth2.createClientCredential(
   userId,
   'my-app-client',
-  'super-secret-password',
+  clientSecret,
   'My Application'
 );
 ```
+
+**Client ID Validation:**
+- Must be 3-255 characters long
+- Can only contain: alphanumeric, hyphens (`-`), underscores (`_`), dots (`.`), colons (`:`)
+- Examples: `my-app`, `service_prod.v2`, `client:region:001`
+
+**Principal Validation:**
+- The principal ID must exist and be active
+- If the principal doesn't exist, credential creation fails with a clear error
+
+**Throws:** Error if:
+- Client ID format is invalid
+- Client ID is already in use (globally unique)
+- Principal doesn't exist or is inactive
 
 ### 4. Exchange Credentials for Token
 
@@ -122,6 +145,23 @@ if (payload) {
 
 ## API Reference
 
+### `generateSecret(length?)`
+
+Generate a cryptographically secure random secret for client credentials.
+
+**Parameters:**
+- `length` (number, optional) - Length of secret in characters (default: 32)
+
+**Returns:** Alphanumeric random string of specified length
+
+**Example:**
+```typescript
+import { generateSecret } from '@riao/authn-oauth2-client-cred';
+
+const secret = generateSecret(32);
+// 'aBcDeFgHiJkLmNoPqRsTuVwXyZ123456'
+```
+
 ### `exchangeCredentials(clientId, clientSecret)`
 
 Exchange client credentials for a JWT access token.
@@ -132,7 +172,16 @@ Exchange client credentials for a JWT access token.
 
 **Returns:** Object with `access_token`, `token_type: 'Bearer'`, and `expires_in` (seconds)
 
-**Throws:** Error if client_id not found or secret doesn't match
+**Tracking:**
+- Updates `last_exchange_timestamp` on successful exchange
+- Increments `failed_exchange_count` on failed attempts
+- Resets `failed_exchange_count` to 0 on successful exchange
+
+**Throws:** Error if:
+- Credential not found (`"Invalid credentials"`)
+- Credential is revoked (`"Credential has been revoked"`)
+- Secret doesn't match (`"Invalid credentials"`)
+- Principal not found (rare edge case)
 
 ### `verifyAccessToken(token)`
 
@@ -148,12 +197,22 @@ Verify and decode a JWT access token.
 Create new client credentials for a principal.
 
 **Parameters:**
-- `principalId` - The principal (user/service) ID
-- `clientId` - Unique identifier (must be unique across system)
-- `clientSecret` - Secret (will be bcrypt hashed)
+- `principalId` - The principal (user/service) ID (must exist and be active)
+- `clientId` - Unique identifier (3-255 chars, alphanumeric + `-`, `_`, `.`, `:`)
+- `clientSecret` - Secret (will be bcrypt hashed, never stored in plain text)
 - `description` - Optional description for the credential
 
 **Returns:** Promise that resolves when credential is created
+
+**Validation:**
+- Principal must exist and be active
+- Client ID must follow format rules
+- Client ID must be globally unique (cannot reuse revoked client IDs)
+
+**Throws:** Error if:
+- Principal doesn't exist or is inactive
+- Client ID format is invalid
+- Client ID is already in use
 
 ### `revokeClientCredential(credentialId)`
 
@@ -166,6 +225,38 @@ Revoke all active credentials for a principal.
 ### `listCredentials(principalId)`
 
 List all active credentials for a principal (secrets are not included).
+
+## Usage Tracking & Monitoring
+
+Credentials automatically track exchange activity for security monitoring:
+
+### Fields
+
+- **`last_exchange_timestamp`** - When the credential was last used successfully
+- **`failed_exchange_count`** - Number of failed authentication attempts since last success
+
+### Example: Detect Compromised Credentials
+
+```typescript
+const credentials = await oauth2.listCredentials(principalId);
+
+for (const cred of credentials) {
+  // Alert if there are many failed attempts
+  if (cred.failed_exchange_count > 5) {
+    console.warn(`Suspicious activity on ${cred.client_id}: ${cred.failed_exchange_count} failed attempts`);
+    // Consider revoking the credential
+    await oauth2.revokeClientCredential(cred.id);
+  }
+
+  // Alert if not used recently
+  if (cred.last_exchange_timestamp) {
+    const daysSinceUse = (Date.now() - cred.last_exchange_timestamp.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSinceUse > 30) {
+      console.info(`Credential ${cred.client_id} unused for ${Math.floor(daysSinceUse)} days`);
+    }
+  }
+}
+```
 
 ## Security Considerations
 

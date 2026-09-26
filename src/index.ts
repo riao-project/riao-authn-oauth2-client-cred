@@ -3,7 +3,9 @@ export {
 	OAuth2ClientCredentialsOptions,
 	OAuth2TokenPayload,
 } from './oauth2-client-credentials-authentication';
-export { ClientCredential } from './client-credential';
 export {
-	OAuth2ClientCredentialsMigrations,
-} from './oauth2-client-credentials-migrations';
+	ClientCredential,
+	CLIENT_ID_VALIDATION,
+	generateSecret,
+} from './client-credential';
+export { OAuth2ClientCredentialsMigrations } from './oauth2-client-credentials-migrations';

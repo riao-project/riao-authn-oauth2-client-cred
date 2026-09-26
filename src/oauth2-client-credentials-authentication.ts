@@ -8,7 +8,7 @@ import { Hash } from '@riao/iam/hash';
 import { Principal } from '@riao/iam/auth';
 import { Authentication } from '@riao/iam/authentication';
 import { AuthOptions } from '@riao/iam/auth/auth';
-import { ClientCredential } from './client-credential';
+import { ClientCredential, CLIENT_ID_VALIDATION } from './client-credential';
 
 /**
  * OAuth2 Client Credentials Token Payload
@@ -85,11 +85,37 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	}
 
 	/**
+	 * Validate client_id format
+	 * @param clientId Client identifier to validate
+	 * @throws Error if format is invalid
+	 */
+	private validateClientId(clientId: string): void {
+		if (!clientId || clientId.length < CLIENT_ID_VALIDATION.MIN_LENGTH) {
+			throw new Error(
+				`Client ID must be at least ${CLIENT_ID_VALIDATION.MIN_LENGTH} characters`
+			);
+		}
+
+		if (clientId.length > CLIENT_ID_VALIDATION.MAX_LENGTH) {
+			throw new Error(
+				`Client ID cannot exceed ${CLIENT_ID_VALIDATION.MAX_LENGTH} characters`
+			);
+		}
+
+		if (!CLIENT_ID_VALIDATION.PATTERN.test(clientId)) {
+			throw new Error(
+				'Client ID must contain only alphanumeric characters, hyphens, underscores, dots, and colons'
+			);
+		}
+	}
+
+	/**
 	 * Create a new client credential for a principal
 	 * @param principalId The principal ID
 	 * @param clientId Unique client identifier
 	 * @param clientSecret Secret (will be hashed before storage)
 	 * @param description Optional description
+	 * @throws Error if principal doesn't exist, client_id is invalid, or already in use
 	 */
 	public async createClientCredential(
 		principalId: DatabaseRecordId,
@@ -97,6 +123,20 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		clientSecret: string,
 		description?: string
 	): Promise<void> {
+		// Validate client_id format
+		this.validateClientId(clientId);
+
+		// Verify principal exists
+		const principal = await this.findActivePrincipal({
+			where: { id: principalId } as TPrincipal,
+		});
+
+		if (!principal) {
+			throw new Error(
+				`Principal with ID "${principalId}" does not exist or is inactive`
+			);
+		}
+
 		// Hash the client secret
 		const secretHash = await this.hash.make(clientSecret);
 
@@ -119,6 +159,7 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 				client_secret_hash: secretHash,
 				description: description ?? null,
 				create_timestamp: new Date(),
+				failed_exchange_count: 0,
 			},
 		});
 	}
@@ -130,6 +171,7 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	 * @param clientId Client identifier
 	 * @param clientSecret Client secret
 	 * @returns Access token and expiration info
+	 * @throws Error if credentials are invalid or principal not found
 	 */
 	public async exchangeCredentials(
 		clientId: string,
@@ -139,26 +181,37 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		token_type: 'Bearer';
 		expires_in: number;
 	}> {
-		// Find active credential by client_id
+		// Find credential by client_id (active or revoked)
 		const credential = await this.credentialsRepo.findOne({
-			where: {
-				client_id: clientId,
-				deactivate_timestamp: null,
-			},
+			where: { client_id: clientId },
 		});
 
+		// Distinguish between credential not found vs. revoked
 		if (!credential) {
-			throw new Error('Invalid client_id');
+			throw new Error('Invalid credentials');
 		}
 
-		// Verify secret
+		if (credential.deactivate_timestamp !== null) {
+			throw new Error('Credential has been revoked');
+		}
+
+		// Verify secret and track failed attempts
 		const isValid = await this.hash.check(
 			clientSecret,
 			credential.client_secret_hash
 		);
 
 		if (!isValid) {
-			throw new Error('Invalid client_secret');
+			// Increment failed attempt counter
+			await this.credentialsRepo.update({
+				set: {
+					failed_exchange_count:
+						(credential.failed_exchange_count || 0) + 1,
+				},
+				where: { id: credential.id },
+			});
+
+			throw new Error('Invalid credentials');
 		}
 
 		// Get principal details
@@ -177,6 +230,15 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		};
 
 		const tokenResult = await this.jwt.generateToken(payload);
+
+		// Update last exchange timestamp and reset failed attempts on success
+		await this.credentialsRepo.update({
+			set: {
+				last_exchange_timestamp: new Date(),
+				failed_exchange_count: 0,
+			},
+			where: { id: credential.id },
+		});
 
 		return {
 			access_token: tokenResult.token,

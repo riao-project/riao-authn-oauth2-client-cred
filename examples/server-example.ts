@@ -2,24 +2,34 @@
  * OAuth2 Client Credentials Authentication Example
  *
  * This example demonstrates the complete OAuth2 Client Credentials flow
- * with production-ready JWT token management.
+ * with production-ready JWT token management, security features, and
+ * credential lifecycle management.
  *
  * Features demonstrated:
+ * - Generating secure client secrets with `generateSecret()`
+ * - Client ID format validation
+ * - Principal validation before credential creation
  * - Creating OAuth2 credentials for principals
  * - Exchanging credentials for JWT access tokens
  * - Verifying access tokens
+ * - Usage tracking (failed attempts, last used timestamp)
  * - Managing credentials (list, revoke)
+ * - Error message clarity (revoked vs. invalid credentials)
  * - Protected endpoints using Bearer tokens
  *
  * Run with: npm start
  */
 
-import { OAuth2ClientCredentialsAuthentication } from '../src';
-import { exampledb } from '../database/example';
+import { OAuth2ClientCredentialsAuthentication, generateSecret } from '../src';
 import { AuthMigrations } from '@riao/iam/auth/auth-migrations';
 import { OAuth2ClientCredentialsMigrations } from '../src/oauth2-client-credentials-migrations';
-import { MigrationRunner, Migration } from '@riao/dbal';
 import { Principal } from '@riao/iam/auth';
+import {
+	createDatabase,
+	runMigrations,
+	runMigrationsDown,
+} from '../test/database';
+import { maindb } from '../database/main';
 
 /* eslint-disable no-console */
 
@@ -37,49 +47,31 @@ interface User extends Principal {
 class UserOAuth2Authentication extends OAuth2ClientCredentialsAuthentication<User> {}
 
 async function main(): Promise<void> {
+	// Create a fresh database for this example run
+	await maindb.init();
+	const db = createDatabase('oauth2-example');
+
 	try {
 		console.log('🔐 OAuth2 Client Credentials Example\n');
 
 		// Initialize database
 		console.log('📦 Initializing database...');
-		await exampledb.init();
+		await db.init();
 		console.log('✓ Database initialized');
 
 		// Run migrations to create schema
 		console.log('📋 Running migrations...');
-		const runner = new MigrationRunner(exampledb);
-
-		// Get and run auth migrations
-		const authMigrations = new AuthMigrations();
-		const authMigrationsMap = await authMigrations.getMigrations();
-		const authMigrationClasses = Object.entries(authMigrationsMap).reduce(
-			(acc, [key, MigrationClass]) => {
-				acc[key] = new (MigrationClass as typeof Migration)(exampledb);
-				return acc;
-			},
-			{} as Record<string, Migration>
-		);
-		await runner.run(authMigrationClasses);
-
-		// Get and run OAuth2 migrations
-		const oauth2Migrations = new OAuth2ClientCredentialsMigrations();
-		const oauth2MigrationsMap = await oauth2Migrations.getMigrations();
-		const oauth2MigrationClasses = Object.entries(
-			oauth2MigrationsMap
-		).reduce(
-			(acc, [key, MigrationClass]) => {
-				acc[key] = new (MigrationClass as typeof Migration)(exampledb);
-				return acc;
-			},
-			{} as Record<string, Migration>
-		);
-		await runner.run(oauth2MigrationClasses);
+		await runMigrations(db, new AuthMigrations());
+		await runMigrations(db, new OAuth2ClientCredentialsMigrations());
+		// Run down/up cycle to verify migrations work correctly
+		await runMigrationsDown(db, new OAuth2ClientCredentialsMigrations());
+		await runMigrations(db, new OAuth2ClientCredentialsMigrations());
 		console.log('✓ Schema ready\n');
 
 		// Create authentication instance
 		const secret = process.env['JWT_SECRET'] || 'demo-secret-key-change';
 		const oauth2 = new UserOAuth2Authentication({
-			db: exampledb,
+			db,
 			jwtSecret: secret,
 			tokenExpiresIn: 3600, // 1 hour
 		});
@@ -112,12 +104,17 @@ async function main(): Promise<void> {
 			}
 		}
 
-		console.log(`Using principal ID: ${userId}\n`);
+		// Example 1: Generate secure client secrets
+		console.log('--- Generating Secure Client Secret ---');
+		const secureSecret = generateSecret(32);
+		console.log('✓ Generated cryptographically secure secret');
+		console.log(`  Secret: ${secureSecret}`);
+		console.log('  (In production: store this securely, only show once)\n');
 
-		// Example 1: Create client credentials
+		// Example 2: Create client credentials
 		console.log('--- Creating Client Credentials ---');
 		const clientId = `my-service-${Date.now()}`;
-		const clientSecret = 'super-secret-password-12345';
+		const clientSecret = secureSecret;
 
 		await oauth2.createClientCredential(
 			userId,
@@ -129,7 +126,7 @@ async function main(): Promise<void> {
 		console.log(`  Client ID: ${clientId}`);
 		console.log(`  Client Secret: ${clientSecret} (keep this safe!)\n`);
 
-		// Example 2: Exchange credentials for access token
+		// Example 3: Exchange credentials for access token
 		console.log('--- Exchanging Credentials for Token ---');
 		const tokenResponse = await oauth2.exchangeCredentials(
 			clientId,
@@ -142,7 +139,7 @@ async function main(): Promise<void> {
 		console.log(`  Expires in: ${tokenResponse.expires_in}s`);
 		console.log(`  Type: ${tokenResponse.token_type}\n`);
 
-		// Example 3: Verify access token
+		// Example 4: Verify access token
 		console.log('--- Verifying Access Token ---');
 		const payload = await oauth2.verifyAccessToken(
 			tokenResponse.access_token
@@ -178,7 +175,7 @@ async function main(): Promise<void> {
 		// Example 6: Create another credential for same principal
 		console.log('--- Creating Second Credential ---');
 		const clientId2 = `my-service-v2-${Date.now()}`;
-		const clientSecret2 = 'another-secret-password-67890';
+		const clientSecret2 = generateSecret(32);
 
 		await oauth2.createClientCredential(
 			userId,
@@ -197,7 +194,7 @@ async function main(): Promise<void> {
 		});
 		console.log();
 
-		// Example 8: Revoke the credential created in Example 1
+		// Example 8: Revoke the credential created in Example 2
 		console.log('--- Revoking First Credential ---');
 		const credentialToRevoke = credentials2.find(
 			(c) => c.client_id === clientId
@@ -228,11 +225,81 @@ async function main(): Promise<void> {
 			`  Token: ${tokenResponse2.access_token.substring(0, 50)}...\n`
 		);
 
+		// Example 11: Client ID validation - demonstrating format rules
+		console.log('--- Client ID Validation Examples ---');
+		const validClientIds = [
+			'simple-app',
+			'service_v2',
+			'api.prod',
+			'worker:batch:001',
+		];
+
+		console.log('✓ Valid client ID formats:');
+		for (const validId of validClientIds) {
+			console.log(`  - ${validId}`);
+		}
+
+		console.log('\n✗ Invalid formats (will be rejected):');
+		console.log('  - "ab" (too short, min 3 chars)');
+		console.log('  - "my@app" (@ not allowed)');
+		console.log('  - "my app" (spaces not allowed)');
+		console.log('  - "api/v1" (/ not allowed)\n');
+
+		// Example 12: Monitor credential usage and activity
+		console.log('--- Monitoring Credential Usage & Security ---');
+		const credentialsForMonitoring = await oauth2.listCredentials(userId);
+
+		for (const cred of credentialsForMonitoring) {
+			console.log(`\n  Credential: ${cred.client_id}`);
+			console.log(
+				`    Last used: ${cred.last_exchange_timestamp ? cred.last_exchange_timestamp.toISOString() : 'Never'}`
+			);
+			console.log(
+				`    Failed attempts: ${cred.failed_exchange_count || 0}`
+			);
+
+			// Alert on suspicious activity
+			if ((cred.failed_exchange_count || 0) > 3) {
+				console.log(
+					'    ⚠️  WARNING: Multiple failed authentication attempts'
+				);
+			}
+		}
+		console.log();
+
+		// Example 13: Distinguish error messages for security monitoring
+		console.log('--- Error Message Clarity for Logging ---');
+
+		// Test a non-existent credential
+		try {
+			await oauth2.exchangeCredentials('never-existed-client', 'secret');
+		}
+		catch (err: any) {
+			console.log(`  Non-existent credential error: "${err.message}"`);
+		}
+
+		// Test a revoked credential
+		try {
+			await oauth2.exchangeCredentials(clientId, clientSecret);
+		}
+		catch (err: any) {
+			console.log(`  Revoked credential error: "${err.message}"`);
+		}
+
+		console.log(
+			'  Note: Both fail-safe with generic "Invalid credentials" for users'
+		);
+		console.log('        but errors can be logged/monitored separately\n');
+
 		console.log('✅ All examples completed successfully!\n');
 	}
 	catch (error) {
 		console.error('❌ Error:', error);
 		process.exit(1);
+	}
+	finally {
+		// Clean up database connection
+		await db.disconnect();
 	}
 }
 

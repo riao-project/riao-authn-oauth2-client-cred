@@ -46,6 +46,17 @@ export class CreateClientCredentialsTable extends Migration {
 					type: ColumnType.TIMESTAMP,
 					required: false,
 				},
+				{
+					name: 'last_exchange_timestamp',
+					type: ColumnType.TIMESTAMP,
+					required: false,
+				},
+				{
+					name: 'failed_exchange_count',
+					type: ColumnType.INT,
+					required: true,
+					default: 0,
+				},
 			],
 		});
 	}
