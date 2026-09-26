@@ -255,26 +255,21 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	public async verifyAccessToken(
 		token: string
 	): Promise<OAuth2TokenPayload | null> {
-		try {
-			const payload = await this.jwt.decodeToken(token);
+		const payload = await this.jwt.decodeToken(token);
 
-			// Verify credential is still active
-			const credential = await this.credentialsRepo.findOne({
-				where: {
-					client_id: payload.client_id,
-					deactivate_timestamp: null,
-				},
-			});
+		// Verify credential is still active
+		const credential = await this.credentialsRepo.findOne({
+			where: {
+				client_id: payload.client_id,
+				deactivate_timestamp: null,
+			},
+		});
 
-			if (!credential) {
-				return null;
-			}
-
-			return payload;
-		}
-		catch {
+		if (!credential) {
 			return null;
 		}
+
+		return payload;
 	}
 
 	/**
@@ -340,26 +335,21 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 			TPrincipal & { client_id: string; client_secret: string }
 		>
 	): Promise<TPrincipal | null> {
-		try {
-			const token = await this.exchangeCredentials(
+		const token = await this.exchangeCredentials(
 				credentials.client_id as string,
 				credentials.client_secret as string
-			);
+		);
 
-			const payload = await this.verifyAccessToken(token.access_token);
+		const payload = await this.verifyAccessToken(token.access_token);
 
-			if (!payload) {
-				return null;
-			}
-
-			const principal = await this.findActivePrincipal({
-				where: { id: payload.principal_id } as TPrincipal,
-			});
-
-			return principal;
-		}
-		catch {
+		if (!payload) {
 			return null;
 		}
+
+		const principal = await this.findActivePrincipal({
+			where: { id: payload.principal_id } as TPrincipal,
+		});
+
+		return principal;
 	}
 }
