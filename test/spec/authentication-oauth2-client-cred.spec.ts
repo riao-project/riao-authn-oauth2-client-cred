@@ -902,7 +902,9 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 				where: { id: credential.id as string },
 			});
 
-			expect(revokedCredential?.deactivate_timestamp).toBeDefined();
+			expect(revokedCredential?.deactivate_timestamp).toEqual(
+				jasmine.any(Date)
+			);
 		});
 
 		it('should revoke all credentials for a principal', async () => {
