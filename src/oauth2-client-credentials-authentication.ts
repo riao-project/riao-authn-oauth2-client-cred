@@ -118,19 +118,24 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	private validateClientId(clientId: string): void {
 		if (!clientId || clientId.length < CLIENT_ID_VALIDATION.MIN_LENGTH) {
 			throw new Error(
-				`Client ID must be at least ${CLIENT_ID_VALIDATION.MIN_LENGTH} characters`
+				'Client ID must be at least '
+				+ CLIENT_ID_VALIDATION.MIN_LENGTH
+				+ ' characters'
 			);
 		}
 
 		if (clientId.length > CLIENT_ID_VALIDATION.MAX_LENGTH) {
 			throw new Error(
-				`Client ID cannot exceed ${CLIENT_ID_VALIDATION.MAX_LENGTH} characters`
+				'Client ID cannot exceed '
+				+ CLIENT_ID_VALIDATION.MAX_LENGTH
+				+ ' characters'
 			);
 		}
 
 		if (!CLIENT_ID_VALIDATION.PATTERN.test(clientId)) {
 			throw new Error(
-				'Client ID must contain only alphanumeric characters, hyphens, underscores, dots, and colons'
+				'Client ID must contain only alphanumeric characters, '
+				+ 'hyphens, underscores, dots, and colons'
 			);
 		}
 	}
@@ -141,7 +146,8 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	 * @param options.clientId Unique client identifier
 	 * @param options.clientSecret Secret (will be hashed before storage)
 	 * @param options.description Optional description
-	 * @throws Error if principal doesn't exist, client_id is invalid, or already in use
+	 * @throws Error if principal doesn't exist,
+	 * client_id is invalid, or already in use
 	 */
 	public async createClientCredential(
 		options: CreateClientCredentialOptions
@@ -152,7 +158,9 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		this.validateClientId(clientId);
 		if (clientSecret.length < CLIENT_SECRET_VALIDATION.MIN_LENGTH) {
 			throw new Error(
-				`Client secret must be at least ${CLIENT_SECRET_VALIDATION.MIN_LENGTH} characters`
+				'Client secret must be at least '
+				+ CLIENT_SECRET_VALIDATION.MIN_LENGTH
+				+ ' characters'
 			);
 		}
 
@@ -163,7 +171,9 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 
 		if (!principal) {
 			throw new Error(
-				`Principal with ID "${principalId}" does not exist or is inactive`
+				'Principal with ID "'
+				+ principalId
+				+ '" does not exist or is inactive'
 			);
 		}
 
@@ -416,10 +426,11 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		});
 
 		// Remove sensitive hashes before returning
-		return credentials.map(
-			({ client_secret_hash, ...safe }) =>
-				safe as Omit<ClientCredential, 'client_secret_hash'>
-		);
+		return credentials.map((credential) => {
+			const safe = { ...credential } as Partial<ClientCredential>;
+			delete safe.client_secret_hash;
+			return safe as Omit<ClientCredential, 'client_secret_hash'>;
+		});
 	}
 
 	/**

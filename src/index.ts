@@ -10,4 +10,6 @@ export {
 	CLIENT_SECRET_VALIDATION,
 	generateSecret,
 } from './client-credential';
-export { OAuth2ClientCredentialsMigrations } from './oauth2-client-credentials-migrations';
+export {
+	OAuth2ClientCredentialsMigrations,
+} from './oauth2-client-credentials-migrations';

@@ -20,9 +20,14 @@
  * Run with: npm start
  */
 
-import { OAuth2ClientCredentialsAuthentication, generateSecret } from '../src';
+import {
+	OAuth2ClientCredentialsAuthentication,
+	generateSecret,
+} from '../src';
 import { AuthMigrations } from '@riao/iam/auth/auth-migrations';
-import { OAuth2ClientCredentialsMigrations } from '../src/oauth2-client-credentials-migrations';
+import {
+	OAuth2ClientCredentialsMigrations,
+} from '../src/oauth2-client-credentials-migrations';
 import { Principal } from '@riao/iam/auth';
 import {
 	createDatabase,
@@ -31,7 +36,7 @@ import {
 } from '../test/database';
 import { maindb } from '../database/main';
 
-/* eslint-disable no-console */
+/* eslint-disable no-console, max-len, @typescript-eslint/no-explicit-any */
 
 /**
  * Example user/principal interface
@@ -274,16 +279,18 @@ async function main(): Promise<void> {
 		try {
 			await oauth2.exchangeCredentials('never-existed-client', 'secret');
 		}
-		catch (err: any) {
-			console.log(`  Non-existent credential error: "${err.message}"`);
+		catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			console.log(`  Non-existent credential error: "${message}"`);
 		}
 
 		// Test a revoked credential
 		try {
 			await oauth2.exchangeCredentials(clientId, clientSecret);
 		}
-		catch (err: any) {
-			console.log(`  Revoked credential error: "${err.message}"`);
+		catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			console.log(`  Revoked credential error: "${message}"`);
 		}
 
 		console.log(

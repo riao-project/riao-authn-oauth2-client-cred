@@ -1,10 +1,13 @@
+/* eslint-disable max-len, @typescript-eslint/no-explicit-any */
 import 'jasmine';
-// eslint-disable-next-line max-len
-import { OAuth2ClientCredentialsAuthentication } from '../../src/oauth2-client-credentials-authentication';
+import {
+	OAuth2ClientCredentialsAuthentication,
+} from '../../src/oauth2-client-credentials-authentication';
 import { createDatabase, runMigrations, runMigrationsDown } from '../database';
 import { Principal } from '@riao/iam/auth';
-// eslint-disable-next-line max-len
-import { OAuth2ClientCredentialsMigrations } from '../../src/oauth2-client-credentials-migrations';
+import {
+	OAuth2ClientCredentialsMigrations,
+} from '../../src/oauth2-client-credentials-migrations';
 import { AuthMigrations } from '@riao/iam/auth/auth-migrations';
 import { compare } from 'bcrypt';
 import { generateSecret } from '../../src';
@@ -55,7 +58,10 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 				name,
 			},
 		});
-		return (typeof id === 'string' ? id : (id as any).id) as string;
+
+		return (typeof id === 'string'
+			? id
+			: (id as { id: string }).id) as string;
 	};
 
 	describe('Client Credential Management', () => {
@@ -587,8 +593,8 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 					validTestSecret
 				);
 			}
-			catch (err: any) {
-				revokedError = err.message;
+			catch (err: unknown) {
+				revokedError = err instanceof Error ? err.message : String(err);
 			}
 
 			expect(revokedError).toContain('revoked');
@@ -598,8 +604,8 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			try {
 				await auth.exchangeCredentials('never-existed', 'secret');
 			}
-			catch (err: any) {
-				notFoundError = err.message;
+			catch (err: unknown) {
+				notFoundError = err instanceof Error ? err.message : String(err);
 			}
 
 			expect(notFoundError).toContain('Invalid credentials');

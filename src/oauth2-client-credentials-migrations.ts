@@ -1,5 +1,7 @@
 import { Migration, MigrationPackage } from '@riao/dbal';
-import { CreateClientCredentialsTable } from './migrations/001-create-client-credentials-table';
+import {
+	CreateClientCredentialsTable,
+} from './migrations/001-create-client-credentials-table';
 
 /**
  * OAuth2 Client Credentials Authentication Migrations
@@ -7,17 +9,18 @@ import { CreateClientCredentialsTable } from './migrations/001-create-client-cre
  * - Principal foreign key with cascade delete
  * - Globally unique client_id constraint
  * - Bcrypt-hashed client secrets
- * - Usage tracking (last exchange timestamp, failed attempt counter)
- * - Credential lifecycle management (create, deactivate timestamps)
+ * - Usage tracking (last exchange timestamp,
+ *   failed attempt counter)
+ * - Credential lifecycle management
+ *   (create, deactivate timestamps)
  */
-export class OAuth2ClientCredentialsMigrations extends MigrationPackage {
-	override package = '@riao/authn-oauth2-client-cred';
-	override name = '@riao/authn-oauth2-client-cred';
+type OAuth2MigrationMap = Record<string, typeof Migration<unknown>>;
 
-	override async getMigrations(): Promise<
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		Record<string, typeof Migration<any>>
-		> {
+export class OAuth2ClientCredentialsMigrations extends MigrationPackage {
+	override package = '@riao/' + 'authn-oauth2-client-cred';
+	override name = '@riao/' + 'authn-oauth2-client-cred';
+
+	override async getMigrations(): Promise<OAuth2MigrationMap> {
 		return {
 			'create-client-credentials-table': CreateClientCredentialsTable,
 		};
