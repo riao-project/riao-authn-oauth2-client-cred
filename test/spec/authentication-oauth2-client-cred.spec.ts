@@ -162,7 +162,12 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			const credentials = await auth.listCredentials(principalId);
 
 			expect(credentials.length).toEqual(1);
-			// Type system ensures client_secret_hash is omitted
+			expect(
+				Object.prototype.hasOwnProperty.call(
+					credentials[0],
+					'client_secret_hash'
+				)
+			).toBeFalse();
 			expect(credentials[0].client_id).toEqual('sensitive-client');
 		});
 	});
