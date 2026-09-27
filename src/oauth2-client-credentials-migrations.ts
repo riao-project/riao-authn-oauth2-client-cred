@@ -1,4 +1,4 @@
-import { Migration, MigrationPackage } from '@riao/dbal';
+import { MigrationPackage, PackagedMigrations } from '@riao/dbal';
 import {
 	CreateClientCredentialsTable,
 } from './migrations/001-create-client-credentials-table';
@@ -14,15 +14,13 @@ import {
  * - Credential lifecycle management
  *   (create, deactivate timestamps)
  */
-type OAuth2MigrationMap = Record<string, typeof Migration<unknown>>;
-
 export class OAuth2ClientCredentialsMigrations extends MigrationPackage {
 	override package = '@riao/' + 'authn-oauth2-client-cred';
 	override name = '@riao/' + 'authn-oauth2-client-cred';
 
-	override async getMigrations(): Promise<OAuth2MigrationMap> {
+	override async getMigrations(): Promise<PackagedMigrations> {
 		return {
 			'create-client-credentials-table': CreateClientCredentialsTable,
-		};
+		} as unknown as PackagedMigrations;
 	}
 }
