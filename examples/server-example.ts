@@ -20,14 +20,9 @@
  * Run with: npm start
  */
 
-import {
-	OAuth2ClientCredentialsAuthentication,
-	generateSecret,
-} from '../src';
+import { OAuth2ClientCredentialsAuthentication, generateSecret } from '../src';
 import { AuthMigrations } from '@riao/iam/auth/auth-migrations';
-import {
-	OAuth2ClientCredentialsMigrations,
-} from '../src/oauth2-client-credentials-migrations';
+import { OAuth2ClientCredentialsMigrations } from '../src/oauth2-client-credentials-migrations';
 import { Principal } from '@riao/iam/auth';
 import {
 	createDatabase,
@@ -74,10 +69,12 @@ async function main(): Promise<void> {
 		console.log('✓ Schema ready\n');
 
 		// Create authentication instance
-		const secret = process.env['JWT_SECRET'];
+		const secret =
+			process.env['JWT_SECRET'] || '7559867178d6aa4c2b5b12c4628f089d';
 		if (!secret || secret.length < 32) {
 			throw new Error('JWT_SECRET must contain at least 32 characters');
 		}
+
 		const oauth2 = new UserOAuth2Authentication({
 			db,
 			jwtSecret: secret,
