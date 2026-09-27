@@ -64,9 +64,14 @@ interface User extends Principal {
 // Create concrete authentication instance
 class UserOAuth2Authentication extends OAuth2ClientCredentialsAuthentication<User> {}
 
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret || jwtSecret.length < 32) {
+  throw new Error('JWT_SECRET must contain at least 32 characters');
+}
+
 const oauth2 = new UserOAuth2Authentication({
   db: database,
-  jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
+  jwtSecret,
   tokenExpiresIn: 3600, // 1 hour
 });
 
