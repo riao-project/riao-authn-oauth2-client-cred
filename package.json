@@ -24,7 +24,7 @@
 	"dependencies": {
 		"@riao/crypto": "^1.1.1",
 		"@riao/dbal": "^3.12.0",
-		"@riao/iam": "^3.0.0"
+		"@riao/iam": "^4.0.0"
 	},
 	"devDependencies": {
 		"@istanbuljs/nyc-config-typescript": "^1.0.2",
