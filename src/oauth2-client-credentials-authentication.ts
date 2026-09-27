@@ -177,12 +177,7 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 			);
 		}
 
-		// Hash the client secret
-		const secretHash = await this.hash.make(clientSecret);
-
 		// Check if client_id is already in use (active or revoked)
-		// The DB has a global unique constraint on client_id, so we must
-		// check all records to avoid unique constraint violations
 		const existing = await this.credentialsRepo.findOne({
 			where: { client_id: clientId },
 		});
@@ -190,6 +185,9 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		if (existing) {
 			throw new Error(`Client ID "${clientId}" is already in use`);
 		}
+
+		// Hash the client secret only after inexpensive validation succeeds
+		const secretHash = await this.hash.make(clientSecret);
 
 		// Store credential
 		await this.credentialsRepo.insertOne({
