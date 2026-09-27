@@ -305,12 +305,11 @@ async function main(): Promise<void> {
 	}
 	catch (error) {
 		console.error('❌ Error:', error);
+		process.exitCode = 1;
 	}
 	finally {
-		// Clean up database connection
 		await db.disconnect();
-
-		process.exit(1);
+		await maindb.disconnect();
 	}
 }
 
