@@ -365,11 +365,20 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		const credential = await this.credentialsRepo.findOne({
 			where: {
 				client_id: payload.client_id,
+				principal_id: payload.principal_id,
 				deactivate_timestamp: null,
 			},
 		});
 
 		if (!credential) {
+			return null;
+		}
+
+		const principal = await this.findActivePrincipal({
+			where: { id: payload.principal_id } as TPrincipal,
+		});
+
+		if (!principal) {
 			return null;
 		}
 

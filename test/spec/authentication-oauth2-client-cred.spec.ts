@@ -776,6 +776,64 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			}
 		});
 
+		it('should reject token when the credential belongs to another principal', async () => {
+			const principalId = await createPrincipal(
+				'mismatched_token_principal',
+				'Mismatched Token Principal'
+			);
+			const otherPrincipalId = await createPrincipal(
+				'other_token_principal',
+				'Other Token Principal'
+			);
+
+			await auth.createClientCredential({
+				principalId,
+				clientId: 'mismatched-token-client',
+				clientSecret: validTestSecret,
+			});
+
+			const tokenResponse = await auth.exchangeCredentials(
+				'mismatched-token-client',
+				validTestSecret
+			);
+
+			await credentialsRepo.update({
+				set: { principal_id: otherPrincipalId },
+				where: { client_id: 'mismatched-token-client' },
+			});
+
+			expect(
+				await auth.verifyAccessToken(tokenResponse.access_token)
+			).toBeNull();
+		});
+
+		it('should reject token when the principal is inactive', async () => {
+			const principalId = await createPrincipal(
+				'inactive_token_principal',
+				'Inactive Token Principal'
+			);
+
+			await auth.createClientCredential({
+				principalId,
+				clientId: 'inactive-token-client',
+				clientSecret: validTestSecret,
+			});
+
+			const tokenResponse = await auth.exchangeCredentials(
+				'inactive-token-client',
+				validTestSecret
+			);
+
+			await repo.update({
+				set: { deactivate_timestamp: new Date() },
+				where: { id: principalId },
+			});
+
+			expect(
+				await auth.verifyAccessToken(tokenResponse.access_token)
+			).toBeNull();
+		});
+
 		it('should reject invalid token format', async () => {
 			await expectAsync(
 				auth.verifyAccessToken('invalid-token')
