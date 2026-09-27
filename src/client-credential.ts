@@ -14,6 +14,7 @@ export interface ClientCredential {
 	deactivate_timestamp?: Date | null;
 	last_exchange_timestamp?: Date | null;
 	failed_exchange_count: number;
+	locked_until?: Date | null;
 }
 
 /**

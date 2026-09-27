@@ -4,10 +4,13 @@
 import { Jwt, JwtPayload } from '@riao/crypto';
 import ms from 'ms';
 import { DatabaseRecordId, QueryRepository } from '@riao/dbal';
-import { Hash } from '@riao/iam/hash';
+import { Hash } from '@riao/crypto';
 import { Principal } from '@riao/iam/auth';
-import { Authentication } from '@riao/iam/authentication';
-import { AuthOptions } from '@riao/iam/auth/auth';
+import {
+	Authentication,
+	AuthenticationAttempt,
+	AuthenticationOptions,
+} from '@riao/iam/authentication';
 import {
 	ClientCredential,
 	CLIENT_ID_VALIDATION,
@@ -22,8 +25,10 @@ export interface OAuth2TokenPayload extends JwtPayload {
 	principal_id: string;
 }
 
-export interface OAuth2ClientCredentialsOptions extends AuthOptions {
+export interface OAuth2ClientCredentialsOptions extends AuthenticationOptions {
 	hash?: Hash;
+	maxFailedAttempts?: number;
+	lockoutDurationMs?: number;
 	/**
 	 * JWT secret for signing tokens
 	 * In production: use strong, random 32+ character secret
@@ -71,10 +76,17 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	protected jwt: Jwt<OAuth2TokenPayload>;
 	protected tokenExpiresInMs: ms.StringValue;
 	protected tokenExpiresInSeconds: number;
+	protected readonly maxFailedAttempts: number;
+	protected readonly lockoutDurationMs: number;
 
 	public constructor(options: OAuth2ClientCredentialsOptions) {
 		super(options);
 		this.hash = options.hash ?? new Hash();
+		this.maxFailedAttempts = Math.max(
+			1,
+			options.maxFailedAttempts ?? 5
+		);
+		this.lockoutDurationMs = options.lockoutDurationMs ?? 15 * 60 * 1000;
 
 		// Convert tokenExpiresIn to ms format and seconds
 		const expiresIn = options.tokenExpiresIn ?? '1h';
@@ -178,6 +190,7 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 				description: description ?? null,
 				create_timestamp: new Date(),
 				failed_exchange_count: 0,
+				locked_until: null,
 			},
 		});
 	}
@@ -199,6 +212,17 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		token_type: 'Bearer';
 		expires_in: number;
 	}> {
+		const attempt: AuthenticationAttempt = {
+			scheme: 'oauth2-client-credentials',
+			subject: clientId,
+		};
+
+		const protection = await this.beforeAuthenticationAttempt(attempt);
+
+		if (!protection.allowed) {
+			throw new Error('Invalid credentials');
+		}
+
 		// Find credential by client_id (active or revoked)
 		const credential = await this.credentialsRepo.findOne({
 			where: { client_id: clientId },
@@ -206,11 +230,31 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 
 		// Distinguish between credential not found vs. revoked
 		if (!credential) {
+			await this.recordAuthenticationFailure(attempt);
 			throw new Error('Invalid credentials');
 		}
 
 		if (credential.deactivate_timestamp !== null) {
 			throw new Error('Credential has been revoked');
+		}
+
+		if (
+			credential.locked_until &&
+			credential.locked_until <= new Date()
+		) {
+			await this.credentialsRepo.update({
+				set: {
+					failed_exchange_count: 0,
+					locked_until: null,
+				},
+				where: { id: credential.id },
+			});
+		}
+		else if (
+			credential.locked_until &&
+			credential.locked_until > new Date()
+		) {
+			throw new Error('Invalid credentials');
 		}
 
 		// Verify secret and track failed attempts
@@ -220,15 +264,8 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		);
 
 		if (!isValid) {
-			// Increment failed attempt counter
-			await this.credentialsRepo.update({
-				set: {
-					failed_exchange_count:
-						(credential.failed_exchange_count || 0) + 1,
-				},
-				where: { id: credential.id },
-			});
-
+			await this.recordAuthenticationFailure(attempt);
+			await this.recordExchangeFailure(credential);
 			throw new Error('Invalid credentials');
 		}
 
@@ -254,15 +291,56 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 			set: {
 				last_exchange_timestamp: new Date(),
 				failed_exchange_count: 0,
+				locked_until: null,
 			},
 			where: { id: credential.id },
 		});
+		await this.recordAuthenticationSuccess(attempt);
 
 		return {
 			access_token: tokenResult.token,
 			token_type: 'Bearer',
 			expires_in: this.tokenExpiresInSeconds,
 		};
+	}
+
+	protected async recordExchangeFailure(
+		credential: ClientCredential
+	): Promise<void> {
+		if (
+			credential.locked_until &&
+			credential.locked_until <= new Date()
+		) {
+			await this.credentialsRepo.update({
+				set: {
+					failed_exchange_count: 0,
+					locked_until: null,
+				},
+				where: { id: credential.id },
+			});
+		}
+
+		await this.credentialsRepo.increment({
+			column: 'failed_exchange_count',
+			where: { id: credential.id },
+		});
+
+		const updatedCredential = await this.credentialsRepo.findOne({
+			where: { id: credential.id },
+		});
+
+		if (
+			updatedCredential &&
+			(updatedCredential.failed_exchange_count || 0) >=
+				this.maxFailedAttempts
+		) {
+			await this.credentialsRepo.update({
+				set: {
+					locked_until: new Date(Date.now() + this.lockoutDurationMs),
+				},
+				where: { id: credential.id },
+			});
+		}
 	}
 
 	/**

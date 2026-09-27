@@ -414,6 +414,108 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 			expect(credential?.failed_exchange_count).toEqual(0);
 		});
 
+		it('should temporarily lock after repeated invalid secrets', async () => {
+			const principalId = await createPrincipal(
+				'lockout_exchange_test',
+				'Lockout Exchange Test'
+			);
+
+			await auth.createClientCredential({
+				principalId,
+				clientId: 'lockout-exchange-client',
+				clientSecret: validTestSecret,
+			});
+
+			for (let attempt = 0; attempt < 5; attempt += 1) {
+				await expectAsync(
+					auth.exchangeCredentials(
+						'lockout-exchange-client',
+						'wrong-secret'
+					)
+				).toBeRejectedWithError();
+			}
+
+			await expectAsync(
+				auth.exchangeCredentials(
+					'lockout-exchange-client',
+					validTestSecret
+				)
+			).toBeRejectedWithError(/Invalid credentials/);
+
+			const credential = await credentialsRepo.findOne({
+				where: { client_id: 'lockout-exchange-client' },
+			});
+			expect(credential?.locked_until).not.toBeNull();
+		});
+
+		it('should clear lockout state after the cooldown expires', async () => {
+			const shortLockoutAuth =
+				new (class extends OAuth2ClientCredentialsAuthentication<OAuth2Principal> {})(
+					{
+						db,
+						jwtSecret: 'test-secret-key-minimum-32-characters-long',
+						tokenExpiresIn: 3600,
+						jwtAlgorithm: 'HS256',
+						maxFailedAttempts: 2,
+						lockoutDurationMs: 10,
+					}
+				);
+
+			const principalId = await createPrincipal(
+				'expired_lockout_exchange_test',
+				'Expired Lockout Exchange Test'
+			);
+
+			await shortLockoutAuth.createClientCredential({
+				principalId,
+				clientId: 'expired-lockout-exchange-client',
+				clientSecret: validTestSecret,
+			});
+
+			await expectAsync(
+				shortLockoutAuth.exchangeCredentials(
+					'expired-lockout-exchange-client',
+					'wrong-secret'
+				)
+			).toBeRejectedWithError();
+			await expectAsync(
+				shortLockoutAuth.exchangeCredentials(
+					'expired-lockout-exchange-client',
+					'wrong-secret'
+				)
+			).toBeRejectedWithError();
+
+			const credential = await shortLockoutAuth.credentialsRepo.findOne({
+				where: { client_id: 'expired-lockout-exchange-client' },
+			});
+
+			if (!credential) {
+				throw new Error('Credential not found');
+			}
+
+			await shortLockoutAuth.credentialsRepo.update({
+				set: {
+					failed_exchange_count: 2,
+					locked_until: new Date(Date.now() - 20),
+				},
+				where: { id: credential.id },
+			});
+
+			const token = await shortLockoutAuth.exchangeCredentials(
+				'expired-lockout-exchange-client',
+				validTestSecret
+			);
+
+			expect(token.access_token).toBeDefined();
+
+			const refreshedCredential =
+				await shortLockoutAuth.credentialsRepo.findOne({
+					where: { client_id: 'expired-lockout-exchange-client' },
+				});
+			expect(refreshedCredential?.failed_exchange_count).toEqual(0);
+			expect(refreshedCredential?.locked_until).toBeNull();
+		});
+
 		it('should update last_exchange_timestamp on successful exchange', async () => {
 			const principalId = await createPrincipal(
 				'track_timestamp_test',

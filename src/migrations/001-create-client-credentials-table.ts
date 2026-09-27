@@ -57,6 +57,11 @@ export class CreateClientCredentialsTable extends Migration {
 					required: true,
 					default: 0,
 				},
+				{
+					name: 'locked_until',
+					type: ColumnType.TIMESTAMP,
+					required: false,
+				},
 			],
 		});
 	}
