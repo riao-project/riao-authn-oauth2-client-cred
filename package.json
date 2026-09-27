@@ -24,7 +24,8 @@
 	"dependencies": {
 		"@riao/crypto": "^1.1.1",
 		"@riao/dbal": "^3.12.0",
-		"@riao/iam": "^4.0.0"
+		"@riao/iam": "^4.0.0",
+		"ms": "^2.1.3"
 	},
 	"devDependencies": {
 		"@istanbuljs/nyc-config-typescript": "^1.0.2",
@@ -39,7 +40,6 @@
 		"bcrypt": "^6.0.0",
 		"eslint": "^8.57.0",
 		"jasmine": "^5.1.0",
-		"ms": "^2.1.3",
 		"nyc": "^17.0.0",
 		"prettier": "^3.3.2",
 		"prettier-eslint": "^16.3.0",
