@@ -359,7 +359,13 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	public async verifyAccessToken(
 		token: string
 	): Promise<OAuth2TokenPayload | null> {
-		const payload = await this.jwt.decodeToken(token);
+		let payload: OAuth2TokenPayload | null = null;
+		try {
+			payload = await this.jwt.decodeToken(token);
+		}
+		catch (error) {
+			return null;
+		}
 
 		// Verify credential is still active
 		const credential = await this.credentialsRepo.findOne({

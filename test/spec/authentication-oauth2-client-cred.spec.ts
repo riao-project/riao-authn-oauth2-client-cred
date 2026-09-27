@@ -835,9 +835,8 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 		});
 
 		it('should reject invalid token format', async () => {
-			await expectAsync(
-				auth.verifyAccessToken('invalid-token')
-			).toBeRejectedWithError();
+			const result = await auth.verifyAccessToken('invalid-token');
+			expect(result).toBeNull();
 		});
 
 		it('should reject token from revoked credential', async () => {
