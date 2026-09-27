@@ -74,7 +74,10 @@ async function main(): Promise<void> {
 		console.log('✓ Schema ready\n');
 
 		// Create authentication instance
-		const secret = process.env['JWT_SECRET'] || 'demo-secret-key-change';
+		const secret = process.env['JWT_SECRET'];
+		if (!secret || secret.length < 32) {
+			throw new Error('JWT_SECRET must contain at least 32 characters');
+		}
 		const oauth2 = new UserOAuth2Authentication({
 			db,
 			jwtSecret: secret,
