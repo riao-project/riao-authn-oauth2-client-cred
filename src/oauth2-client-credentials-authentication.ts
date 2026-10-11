@@ -23,6 +23,7 @@ import {
 export interface OAuth2TokenPayload extends JwtPayload {
 	client_id: string;
 	principal_id: string;
+	token_type: 'access';
 }
 
 export interface OAuth2ClientCredentialsOptions extends AuthenticationOptions {
@@ -290,6 +291,7 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		const payload: OAuth2TokenPayload = {
 			client_id: clientId,
 			principal_id: credential.principal_id,
+			token_type: 'access',
 		};
 
 		const tokenResult = await this.jwt.generateToken(payload);
@@ -364,6 +366,15 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 			payload = await this.jwt.decodeToken(token);
 		}
 		catch (error) {
+			return null;
+		}
+
+		if (
+			typeof payload.client_id !== 'string' ||
+			!payload.client_id.trim() ||
+			typeof payload.principal_id !== 'string' ||
+			!payload.principal_id.trim() || payload.token_type !== 'access'
+		) {
 			return null;
 		}
 
