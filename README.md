@@ -73,6 +73,8 @@ const oauth2 = new UserOAuth2Authentication({
   db: database,
   jwtSecret,
   tokenExpiresIn: 3600, // 1 hour
+  jwtIssuer: 'identity-service',
+  jwtAudience: 'my-api',
 });
 
 // Access principals via the inherited principalRepo property
@@ -81,6 +83,13 @@ const principal = await oauth2.principalRepo.findOne({
   where: { id: userId },
 });
 ```
+
+`jwtIssuer` and `jwtAudience` are optional non-empty strings. Configured values
+are included in newly issued tokens and enforced during verification; tokens
+with missing or different claims are rejected. Unconfigured claims remain
+unrestricted. This requires the `JwtVerificationOptions` API from the
+[@riao/crypto issuer/audience change](https://github.com/riao-project/riao-crypto/issues/9).
+Update the crypto dependency minimum once that feature has been released.
 
 ### 3. Create Client Credentials
 
