@@ -199,7 +199,57 @@ Verify and decode a JWT access token.
 **Parameters:**
 - `token` (string) - JWT access token
 
-**Returns:** Token payload with `client_id`, `principal_id`, `iat`, `exp` if valid; null if invalid/expired
+**Returns:** Verified payload with `client_id` and `principal_id`
+if valid; `null` for invalid/expired tokens, revoked
+credentials, or missing/inactive principals. The crypto helper removes
+`iat`, `nbf`, and `exp` after verification.
+
+### Version 2 authentication contract
+
+Signature, algorithm, expiry, and not-before are checked. Invalid tokens are
+rejected without treating verifier configuration failures as bad credentials.
+
+`authenticate()` returns a principal or `null` for expected credential rejection
+or blocking.
+`exchangeCredentials()` preserves its token response shape and throws IAM's
+`AuthenticationRejectedError` for expected rejection, or
+`AuthenticationBlockedError` carrying `retryAfterSeconds` for a temporary block.
+Operational failures propagate unchanged. At an OAuth2 token endpoint, map
+these expected errors to protocol-appropriate responses; at an HTTP login
+boundary a temporary block can map to 429/Retry-After. Never expose backend
+exceptions or client secrets in responses.
+
+```typescript
+const principal = await oauth2.authenticate({
+  client_id: 'my-app-client',
+  client_secret: clientSecret,
+});
+
+if (principal === null) {
+  // Return a generic authentication rejection.
+} else {
+  // Continue using the trusted principal; create any application session here.
+}
+```
+
+`exchangeCredentials()` protection hooks record invalid/missing/revoked/inactive
+credential failures and success after the exchange timestamp and lockout state
+are persisted. Pre-attempt denials and existing local lockouts do not record
+another failure. Operational errors propagate and are not credential failures.
+
+### API bearer integration
+
+```typescript
+import { RiaoOAuth2BearerAuthenticationScheme } from '@riao/rest';
+
+const authentication = new RiaoOAuth2BearerAuthenticationScheme(oauth2);
+// Pass authentication to RestServer with requireAuthentication: true.
+// Configure an authorizer and route authorization requirements separately.
+```
+
+The adapter resolves an active principal and attaches it to the request.
+Invalid tokens yield 401; genuine authorization denials yield 403; unexpected
+dependency failures yield 500 without executing protected handlers.
 
 ### `createClientCredential(options)`
 

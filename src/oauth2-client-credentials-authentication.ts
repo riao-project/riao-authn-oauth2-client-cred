@@ -1,7 +1,9 @@
 /**
  * OAuth2 Client Credentials Authentication
  */
-import { Jwt, JwtPayload } from '@riao/crypto';
+import {
+	Jwt, JwtPayload, isTokenValidationError,
+} from '@riao/crypto';
 import ms from 'ms';
 import { DatabaseRecordId, QueryRepository } from '@riao/dbal';
 import { Hash } from '@riao/crypto';
@@ -10,6 +12,8 @@ import {
 	Authentication,
 	AuthenticationAttempt,
 	AuthenticationOptions,
+	AuthenticationRejectedError,
+	AuthenticationBlockedError,
 } from '@riao/iam/authentication';
 import {
 	ClientCredential,
@@ -228,7 +232,15 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		const protection = await this.beforeAuthenticationAttempt(attempt);
 
 		if (!protection.allowed) {
-			throw new Error('Invalid credentials');
+			throw new AuthenticationBlockedError(protection.retryAfterSeconds);
+		}
+
+		if (
+			typeof clientId !== 'string' || !clientId ||
+			typeof clientSecret !== 'string' || !clientSecret
+		) {
+			await this.recordAuthenticationFailure(attempt);
+			throw new AuthenticationRejectedError('Invalid credentials');
 		}
 
 		// Find credential by client_id (active or revoked)
@@ -239,11 +251,14 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		// Distinguish between credential not found vs. revoked
 		if (!credential) {
 			await this.recordAuthenticationFailure(attempt);
-			throw new Error('Invalid credentials');
+			throw new AuthenticationRejectedError('Invalid credentials');
 		}
 
 		if (credential.deactivate_timestamp !== null) {
-			throw new Error('Credential has been revoked');
+			await this.recordAuthenticationFailure(attempt);
+			throw new AuthenticationRejectedError(
+				'Credential has been revoked'
+			);
 		}
 
 		if (
@@ -262,7 +277,9 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 			credential.locked_until &&
 			credential.locked_until > new Date()
 		) {
-			throw new Error('Invalid credentials');
+			throw new AuthenticationBlockedError(Math.ceil(
+				(credential.locked_until.getTime() - Date.now()) / 1000
+			));
 		}
 
 		// Verify secret and track failed attempts
@@ -274,7 +291,7 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		if (!isValid) {
 			await this.recordAuthenticationFailure(attempt);
 			await this.recordExchangeFailure(credential);
-			throw new Error('Invalid credentials');
+			throw new AuthenticationRejectedError('Invalid credentials');
 		}
 
 		// Get principal details
@@ -283,7 +300,8 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		});
 
 		if (!principal) {
-			throw new Error('Principal not found');
+			await this.recordAuthenticationFailure(attempt);
+			throw new AuthenticationRejectedError('Principal not found');
 		}
 
 		// Generate JWT token using @riao/crypto
@@ -359,12 +377,18 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	public async verifyAccessToken(
 		token: string
 	): Promise<OAuth2TokenPayload | null> {
-		let payload: OAuth2TokenPayload | null = null;
+		if (typeof token !== 'string' || !token) {
+			return null;
+		}
+		let payload: OAuth2TokenPayload;
 		try {
 			payload = await this.jwt.decodeToken(token);
 		}
 		catch (error) {
-			return null;
+			if (isTokenValidationError(error)) {
+				return null;
+			}
+			throw error;
 		}
 
 		// Verify credential is still active
@@ -455,10 +479,19 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 			TPrincipal & { client_id: string; client_secret: string }
 		>
 	): Promise<TPrincipal | null> {
-		const token = await this.exchangeCredentials(
-			credentials.client_id as string,
-			credentials.client_secret as string
-		);
+		let token: { access_token: string };
+		try {
+			token = await this.exchangeCredentials(
+				credentials.client_id as string,
+				credentials.client_secret as string
+			);
+		}
+		catch (error) {
+			if (error instanceof AuthenticationRejectedError) {
+				return null;
+			}
+			throw error;
+		}
 
 		const payload = await this.verifyAccessToken(token.access_token);
 
