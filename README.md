@@ -157,13 +157,7 @@ if (payload) {
 ### Access-token format migration
 
 Signed access-token payloads must contain `token_type: 'access'` and non-empty
-string `client_id` and `principal_id` claims. The token response still uses
-`token_type: 'Bearer'`; that transport field is distinct from the signed purpose.
-
-This intentionally rejects legacy tokens without the purpose claim, even if
-their signatures are valid. Deploy this change as a breaking release and replace
-existing tokens by exchanging client credentials again. Tokens for other purposes
-must never be accepted as access tokens.
+string `client_id` and `principal_id` claims.
 
 ### `generateSecret(length?)`
 
