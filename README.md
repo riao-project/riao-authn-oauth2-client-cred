@@ -239,15 +239,27 @@ another failure. Operational errors propagate and are not credential failures.
 
 ### API bearer integration
 
-```typescript
-import { RiaoOAuth2BearerAuthenticationScheme } from '@riao/rest';
+Use API Machine 2's existing bearer scheme; no adapter package is needed.
 
-const authentication = new RiaoOAuth2BearerAuthenticationScheme(oauth2);
+```typescript
+import { BearerAuthenticationScheme } from 'api-machine';
+
+const authentication = new BearerAuthenticationScheme({
+  checkToken: async (token) => {
+    const payload = await oauth2.verifyAccessToken(token);
+    if (!payload) {
+      return false;
+    }
+    return (await oauth2.findActivePrincipal({
+      where: { id: payload.principal_id },
+    })) ?? false;
+  },
+});
 // Pass authentication to RestServer with requireAuthentication: true.
 // Configure an authorizer and route authorization requirements separately.
 ```
 
-The adapter resolves an active principal and attaches it to the request.
+The callback resolves an active principal; API Machine attaches it to the request.
 Invalid tokens yield 401; genuine authorization denials yield 403; unexpected
 dependency failures yield 500 without executing protected handlers.
 
