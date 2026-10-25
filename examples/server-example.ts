@@ -25,6 +25,10 @@ import { AuthMigrations } from '@riao/iam/auth/auth-migrations';
 import { OAuth2ClientCredentialsMigrations } from '../src/oauth2-client-credentials-migrations';
 import { Principal } from '@riao/iam/auth';
 import {
+	AuthenticationBlockedError,
+	AuthenticationRejectedError,
+} from '@riao/iam/authentication';
+import {
 	createDatabase,
 	runMigrations,
 	runMigrationsDown,
@@ -45,6 +49,25 @@ interface User extends Principal {
  * Concrete implementation of OAuth2 authentication
  */
 class UserOAuth2Authentication extends OAuth2ClientCredentialsAuthentication<User> {}
+
+function handleExpectedExchangeError(error: unknown): void {
+	if (error instanceof AuthenticationBlockedError) {
+		if (error.retryAfterSeconds === undefined) {
+			console.log('Temporarily blocked');
+		}
+		else {
+			console.log(
+				`Temporarily blocked; retry after ${error.retryAfterSeconds} seconds`
+			);
+		}
+		return;
+	}
+	if (error instanceof AuthenticationRejectedError) {
+		console.log('Credentials were rejected');
+		return;
+	}
+	throw error;
+}
 
 async function main(): Promise<void> {
 	// Create a fresh database for this example run
@@ -174,7 +197,8 @@ async function main(): Promise<void> {
 			console.log('✗ Should have thrown error');
 		}
 		catch (error) {
-			console.log(`✓ Correctly rejected: ${(error as Error).message}\n`);
+			handleExpectedExchangeError(error);
+			console.log();
 		}
 
 		// Example 6: Create another credential for same principal
@@ -216,7 +240,8 @@ async function main(): Promise<void> {
 			console.log('✗ Should have thrown error');
 		}
 		catch (error) {
-			console.log(`✓ Correctly rejected: ${(error as Error).message}\n`);
+			handleExpectedExchangeError(error);
+			console.log();
 		}
 
 		// Example 10: Active credential still works
@@ -272,31 +297,20 @@ async function main(): Promise<void> {
 		}
 		console.log();
 
-		// Example 13: Distinguish error messages for security monitoring
-		console.log('--- Error Message Clarity for Logging ---');
+		// Example 13: Handle typed credential rejection and temporary blocks
+		console.log('--- Handling Typed Exchange Errors ---');
 
-		// Test a non-existent credential
 		try {
 			await oauth2.exchangeCredentials('never-existed-client', 'secret');
 		}
-		catch (err: unknown) {
-			const message = err instanceof Error ? err.message : String(err);
-			console.log(`  Non-existent credential error: "${message}"`);
-		}
-
-		// Test a revoked credential
-		try {
-			await oauth2.exchangeCredentials(clientId, clientSecret);
-		}
-		catch (err: unknown) {
-			const message = err instanceof Error ? err.message : String(err);
-			console.log(`  Revoked credential error: "${message}"`);
+		catch (error) {
+			handleExpectedExchangeError(error);
 		}
 
 		console.log(
-			'  Note: Both fail-safe with generic "Invalid credentials" for users'
+			'Operational errors are not credential rejections and are rethrown.'
 		);
-		console.log('        but errors can be logged/monitored separately\n');
+		console.log();
 
 		console.log('✅ All examples completed successfully!\n');
 	}

@@ -451,7 +451,7 @@ describe('Authentication - OAuth2 Client Credentials', () => {
 					'lockout-exchange-client',
 					validTestSecret
 				)
-			).toBeRejectedWithError(/Invalid credentials/);
+			).toBeRejectedWithError(/temporarily unavailable/);
 
 			const credential = await credentialsRepo.findOne({
 				where: { client_id: 'lockout-exchange-client' },

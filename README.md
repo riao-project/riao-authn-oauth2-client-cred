@@ -208,7 +208,31 @@ Verify and decode a JWT access token.
 **Parameters:**
 - `token` (string) - JWT access token
 
-**Returns:** Token payload with `client_id`, `principal_id`, `iat`, `exp` if valid; null if invalid/expired
+**Returns:** Verified payload with `client_id` and `principal_id`
+if valid; `null` for invalid/expired tokens, revoked
+credentials, or missing/inactive principals. The crypto helper removes
+`iat`, `nbf`, and `exp` after verification.
+
+### API bearer integration
+
+Use API Machine 2's existing bearer scheme:
+
+```typescript
+import { BearerAuthenticationScheme } from 'api-machine';
+
+const authentication = new BearerAuthenticationScheme({
+  checkToken: async (token) => {
+    const payload = await oauth2.verifyAccessToken(token);
+    if (!payload) {
+      return false;
+    }
+
+    return (await oauth2.findActivePrincipal({
+      where: { id: payload.principal_id },
+    })) ?? false;
+  },
+});
+```
 
 ### `createClientCredential(options)`
 
