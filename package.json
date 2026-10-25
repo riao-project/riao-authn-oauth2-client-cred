@@ -22,7 +22,7 @@
 		"publish": "npm run script -- publish"
 	},
 	"dependencies": {
-		"@riao/crypto": "^1.1.1",
+		"@riao/crypto": "^1.2.0",
 		"@riao/dbal": "^3.12.0",
 		"@riao/iam": "^4.0.0",
 		"ms": "^2.1.3"

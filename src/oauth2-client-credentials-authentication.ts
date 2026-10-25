@@ -1,7 +1,7 @@
 /**
  * OAuth2 Client Credentials Authentication
  */
-import { Jwt, JwtPayload } from '@riao/crypto';
+import { Jwt, JwtPayload, JwtVerificationOptions } from '@riao/crypto';
 import ms from 'ms';
 import { DatabaseRecordId, QueryRepository } from '@riao/dbal';
 import { Hash } from '@riao/crypto';
@@ -46,6 +46,8 @@ export interface OAuth2ClientCredentialsOptions extends AuthenticationOptions {
 	 * Default: HS256
 	 */
 	jwtAlgorithm?: 'HS256' | 'HS512';
+	jwtIssuer?: string;
+	jwtAudience?: string;
 }
 
 /**
@@ -79,9 +81,19 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	protected tokenExpiresInSeconds: number;
 	protected readonly maxFailedAttempts: number;
 	protected readonly lockoutDurationMs: number;
+	protected readonly verificationOptions: JwtVerificationOptions;
 
 	public constructor(options: OAuth2ClientCredentialsOptions) {
 		super(options);
+		for (const claim of [options.jwtIssuer, options.jwtAudience]) {
+			if (claim !== undefined && !claim.trim()) {
+				throw new Error('JWT issuer and audience must be non-empty');
+			}
+		}
+		this.verificationOptions = {
+			issuer: options.jwtIssuer,
+			audience: options.jwtAudience,
+		};
 		this.hash = options.hash ?? new Hash();
 		this.maxFailedAttempts = Math.max(
 			1,
@@ -294,7 +306,12 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 			token_type: 'access',
 		};
 
-		const tokenResult = await this.jwt.generateToken(payload);
+		const tokenResult = await this.jwt.generateToken(payload, {
+			...(this.verificationOptions.issuer !== undefined
+				? { issuer: this.verificationOptions.issuer } : {}),
+			...(this.verificationOptions.audience !== undefined
+				? { audience: this.verificationOptions.audience } : {}),
+		});
 
 		// Update last exchange timestamp and reset failed attempts on success
 		await this.credentialsRepo.update({
@@ -363,7 +380,9 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	): Promise<OAuth2TokenPayload | null> {
 		let payload: OAuth2TokenPayload | null = null;
 		try {
-			payload = await this.jwt.decodeToken(token);
+			payload = await this.jwt.decodeToken(
+				token, this.verificationOptions
+			);
 		}
 		catch (error) {
 			return null;
