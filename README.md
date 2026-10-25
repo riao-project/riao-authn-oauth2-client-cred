@@ -84,12 +84,7 @@ const principal = await oauth2.principalRepo.findOne({
 });
 ```
 
-`jwtIssuer` and `jwtAudience` are optional non-empty strings. Configured values
-are included in newly issued tokens and enforced during verification; tokens
-with missing or different claims are rejected. Unconfigured claims remain
-unrestricted. This requires the `JwtVerificationOptions` API from the
-[@riao/crypto issuer/audience change](https://github.com/riao-project/riao-crypto/issues/9).
-Update the crypto dependency minimum once that feature has been released.
+`jwtIssuer` and `jwtAudience` are optional non-empty strings. Configured values are included in newly issued tokens and enforced during verification; tokens with missing or different claims are rejected.
 
 ### 3. Create Client Credentials
 
