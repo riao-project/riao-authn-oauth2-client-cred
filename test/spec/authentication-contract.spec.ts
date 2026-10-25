@@ -50,7 +50,7 @@ describe('OAuth2 authentication contract', () => {
 
 	async function token() {
 		return (await jwt.generateToken({
-			client_id: 'client', principal_id: 'user',
+			client_id: 'client', principal_id: 'user', token_type: 'access',
 		})).token;
 	}
 

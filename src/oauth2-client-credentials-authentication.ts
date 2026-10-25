@@ -2,7 +2,7 @@
  * OAuth2 Client Credentials Authentication
  */
 import {
-	Jwt, JwtPayload, isTokenValidationError,
+	Jwt, JwtPayload, JwtVerificationOptions, isTokenValidationError,
 } from '@riao/crypto';
 import ms from 'ms';
 import { DatabaseRecordId, QueryRepository } from '@riao/dbal';
@@ -27,6 +27,7 @@ import {
 export interface OAuth2TokenPayload extends JwtPayload {
 	client_id: string;
 	principal_id: string;
+	token_type: 'access';
 }
 
 export interface OAuth2ClientCredentialsOptions extends AuthenticationOptions {
@@ -49,6 +50,8 @@ export interface OAuth2ClientCredentialsOptions extends AuthenticationOptions {
 	 * Default: HS256
 	 */
 	jwtAlgorithm?: 'HS256' | 'HS512';
+	jwtIssuer?: string;
+	jwtAudience?: string;
 }
 
 /**
@@ -82,9 +85,19 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	protected tokenExpiresInSeconds: number;
 	protected readonly maxFailedAttempts: number;
 	protected readonly lockoutDurationMs: number;
+	protected readonly verificationOptions: JwtVerificationOptions;
 
 	public constructor(options: OAuth2ClientCredentialsOptions) {
 		super(options);
+		for (const claim of [options.jwtIssuer, options.jwtAudience]) {
+			if (claim !== undefined && !claim.trim()) {
+				throw new Error('JWT issuer and audience must be non-empty');
+			}
+		}
+		this.verificationOptions = {
+			issuer: options.jwtIssuer,
+			audience: options.jwtAudience,
+		};
 		this.hash = options.hash ?? new Hash();
 		this.maxFailedAttempts = Math.max(
 			1,
@@ -308,9 +321,15 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		const payload: OAuth2TokenPayload = {
 			client_id: clientId,
 			principal_id: credential.principal_id,
+			token_type: 'access',
 		};
 
-		const tokenResult = await this.jwt.generateToken(payload);
+		const tokenResult = await this.jwt.generateToken(payload, {
+			...(this.verificationOptions.issuer !== undefined
+				? { issuer: this.verificationOptions.issuer } : {}),
+			...(this.verificationOptions.audience !== undefined
+				? { audience: this.verificationOptions.audience } : {}),
+		});
 
 		// Update last exchange timestamp and reset failed attempts on success
 		await this.credentialsRepo.update({
@@ -382,13 +401,24 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 		}
 		let payload: OAuth2TokenPayload;
 		try {
-			payload = await this.jwt.decodeToken(token);
+			payload = await this.jwt.decodeToken(
+				token, this.verificationOptions
+			);
 		}
 		catch (error) {
 			if (isTokenValidationError(error)) {
 				return null;
 			}
 			throw error;
+		}
+
+		if (
+			typeof payload.client_id !== 'string' ||
+			!payload.client_id.trim() ||
+			typeof payload.principal_id !== 'string' ||
+			!payload.principal_id.trim() || payload.token_type !== 'access'
+		) {
+			return null;
 		}
 
 		// Verify credential is still active
