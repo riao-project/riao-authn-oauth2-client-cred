@@ -55,6 +55,7 @@ describe('OAuth2 issuer and audience', () => {
 		]) {
 			const signed = await jwt.generateToken({
 				client_id: 'client', principal_id: 'user',
+				token_type: 'access',
 			}, options);
 			expect(await auth.verifyAccessToken(signed.token)).toBeNull();
 		}
