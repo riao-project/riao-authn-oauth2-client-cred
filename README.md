@@ -163,6 +163,11 @@ if (payload) {
 
 ## API Reference
 
+### Access-token format migration
+
+Signed access-token payloads must contain `token_type: 'access'` and non-empty
+string `client_id` and `principal_id` claims.
+
 ### `generateSecret(length?)`
 
 Generate a cryptographically secure random secret for client credentials.
