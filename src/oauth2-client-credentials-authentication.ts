@@ -239,7 +239,7 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	}> {
 		const attempt: AuthenticationAttempt = {
 			scheme: 'oauth2-client-credentials',
-			subject: clientId,
+			subject: typeof clientId === 'string' ? clientId : '',
 		};
 
 		const protection = await this.beforeAuthenticationAttempt(attempt);
@@ -507,13 +507,17 @@ export abstract class OAuth2ClientCredentialsAuthentication<
 	public async authenticate(
 		credentials: Partial<
 			TPrincipal & { client_id: string; client_secret: string }
-		>
+		> | null | undefined
 	): Promise<TPrincipal | null> {
+		const clientId = credentials && typeof credentials === 'object'
+			? credentials.client_id : undefined;
+		const clientSecret = credentials && typeof credentials === 'object'
+			? credentials.client_secret : undefined;
 		let token: { access_token: string };
 		try {
 			token = await this.exchangeCredentials(
-				credentials.client_id as string,
-				credentials.client_secret as string
+				typeof clientId === 'string' ? clientId : '',
+				typeof clientSecret === 'string' ? clientSecret : ''
 			);
 		}
 		catch (error) {

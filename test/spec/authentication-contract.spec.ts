@@ -97,6 +97,25 @@ describe('OAuth2 authentication contract', () => {
 		expect(protection.onFailure).not.toHaveBeenCalled();
 	});
 
+	it('rejects missing credentials without breaking protection hooks',
+		async () => {
+			protection.beforeAttempt.and.callFake(async (attempt) => {
+				attempt.subject.trim();
+				return { allowed: true };
+			});
+			protection.onFailure.and.callFake(async (attempt) => {
+				attempt.subject.trim();
+			});
+
+			for (const credentials of [null, undefined, {}]) {
+				expect(await auth.authenticate(credentials)).toBeNull();
+			}
+			expect(protection.beforeAttempt).toHaveBeenCalledTimes(3);
+			expect(protection.onFailure).toHaveBeenCalledTimes(3);
+			expect(auth.credentialsRepo.findOne).not.toHaveBeenCalled();
+		}
+	);
+
 	it('uses typed rejection and records failures once', async () => {
 		(auth.credentialsRepo.findOne as jasmine.Spy).and.resolveTo(null);
 		await expectAsync(auth.exchangeCredentials('missing', 'secret'))
